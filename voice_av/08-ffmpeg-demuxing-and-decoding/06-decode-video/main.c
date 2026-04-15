@@ -1,5 +1,5 @@
 ﻿/**
- * @projectName   lesson_08_06_decode_video
+ * @projectName   voice_av_08_06_decode_video
  * @brief         解码视频，主要的测试格式h264和mpeg2
  *
  * @author        Liao Qingfu
@@ -54,7 +54,9 @@ static void decode(AVCodecContext* dec_ctx, AVPacket* pkt, AVFrame* frame, FILE*
         // 对于frame, avcodec_receive_frame内部每次都先调用
         ret = avcodec_receive_frame(dec_ctx, frame);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+        {
             return;
+        }
         else if (ret < 0)
         {
             fprintf(stderr, "Error during decoding\n");
@@ -71,11 +73,17 @@ static void decode(AVCodecContext* dec_ctx, AVPacket* pkt, AVFrame* frame, FILE*
         // 在音视频合成输出的时候讲解 frame->linesize[1]  对齐的问题 正确写法
         // linesize[]代表每行的字节数量，所以每行的偏移是linesize[]
         for (int j = 0; j < frame->height; j++)
+        {
             fwrite(frame->data[0] + j * frame->linesize[0], 1, frame->width, outfile);
+        }
         for (int j = 0; j < frame->height / 2; j++)
+        {
             fwrite(frame->data[1] + j * frame->linesize[1], 1, frame->width / 2, outfile);
+        }
         for (int j = 0; j < frame->height / 2; j++)
+        {
             fwrite(frame->data[2] + j * frame->linesize[2], 1, frame->width / 2, outfile);
+        }
 
         // 错误写法 用source.200kbps.766x322_10s.h264测试时可以看出该种方法是错误的
         //  写入y分量
@@ -211,7 +219,9 @@ int main(int argc, char** argv)
         data_size -= ret;  // 对应的缓存大小也做相应减小
 
         if (pkt->size)
+        {
             decode(codec_ctx, pkt, decoded_frame, outfile);
+        }
 
         if (data_size < VIDEO_REFILL_THRESH)  // 如果数据少了则再次读取
         {
@@ -220,7 +230,9 @@ int main(int argc, char** argv)
             // 读取数据 长度: VIDEO_INBUF_SIZE - data_size
             len = fread(data + data_size, 1, VIDEO_INBUF_SIZE - data_size, infile);
             if (len > 0)
+            {
                 data_size += len;
+            }
         }
     }
 

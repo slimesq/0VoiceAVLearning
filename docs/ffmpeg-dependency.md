@@ -8,7 +8,9 @@ not publish an exact `ffmpeg/7.1` recipe.
 The project exposes a local Conan option named `ffmpeg_flavor`:
 
 - `light`: the default. Keeps Conan Center's default `ffmpeg/7.1.3` options and
-  is intended to reuse prebuilt binaries.
+  uses prebuilt binaries only. On Ubuntu 22 LTS, the dependency script installs
+  GCC 13 when needed because Conan Center's Linux x86_64 FFmpeg binaries are
+  published for GCC 13.
 - `full`: enables the Conan options that correspond to the requested FFmpeg
   configure flags below. This may require local source builds.
 
@@ -18,6 +20,10 @@ Install dependencies interactively:
 .\pull_dependency.ps1
 ```
 
+```bash
+bash ./pull_dependency.sh
+```
+
 Or skip prompts:
 
 ```powershell
@@ -25,9 +31,14 @@ Or skip prompts:
 .\pull_dependency.ps1 -Flavor full -BuildType Release
 ```
 
-For `light + Debug`, the script installs Release Conan packages and the CMake
-project maps Debug builds to those packages. This keeps the default path on
-prebuilt FFmpeg binaries.
+```bash
+bash ./pull_dependency.sh --flavor light --build-type Debug
+bash ./pull_dependency.sh --flavor full --build-type Release
+```
+
+For `light + Debug`, the scripts install Release Conan packages and the CMake
+project maps Debug builds to those packages. This avoids Debug dependency builds
+and keeps the default path on prebuilt FFmpeg binaries.
 
 ## Mapped Configure Flags
 

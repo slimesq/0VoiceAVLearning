@@ -1,8 +1,8 @@
 {
-  "version": 4,
+  "version": 3,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 23,
+    "minor": 22,
     "patch": 0
   },
   "configurePresets": [
@@ -13,7 +13,46 @@
       "binaryDir": "${sourceDir}/build/cmake",
       "architecture": "x64",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/generators/conan_toolchain.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/windows/generators/conan_toolchain.cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "voice-av-linux-debug",
+      "displayName": "Voice AV Linux Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cmake-linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc-13",
+        "CMAKE_CXX_COMPILER": "g++-13",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/linux/generators/conan_toolchain.cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "voice-av-linux-release",
+      "displayName": "Voice AV Linux Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cmake-linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "gcc-13",
+        "CMAKE_CXX_COMPILER": "g++-13",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/linux/generators/conan_toolchain.cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
       }
     }
   ],
@@ -23,14 +62,46 @@
       "displayName": "Voice AV Visual Studio 2022 x64 Debug",
       "configurePreset": "voice-av-vs2022-x64",
       "configuration": "Debug",
-      "jobs": 16
+      "jobs": 16,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
       "name": "voice-av-vs2022-x64-release",
       "displayName": "Voice AV Visual Studio 2022 x64 Release",
       "configurePreset": "voice-av-vs2022-x64",
       "configuration": "Release",
-      "jobs": 16
+      "jobs": 16,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "voice-av-linux-debug",
+      "displayName": "Voice AV Linux Debug",
+      "configurePreset": "voice-av-linux-debug",
+      "jobs": 16,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "voice-av-linux-release",
+      "displayName": "Voice AV Linux Release",
+      "configurePreset": "voice-av-linux-release",
+      "jobs": 16,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
     }
   ]
 }

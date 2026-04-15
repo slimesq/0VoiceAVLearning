@@ -4,7 +4,7 @@ Audio/video learning examples built with CMake, Conan, and FFmpeg.
 
 ## Quick Start
 
-Install or refresh dependencies:
+### Windows
 
 ```powershell
 .\pull_dependency.ps1
@@ -28,14 +28,54 @@ Run the basic FFmpeg version example:
 .\build\cmake\Debug\voice_av_learning.exe
 ```
 
+### Ubuntu 22 LTS
+
+Install the common build tools:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake ninja-build python3 python3-pip git curl tar bzip2 pkg-config nasm yasm
+python3 -m pip install --user conan
+```
+
+Make sure `~/.local/bin` is in `PATH` if `conan` is not found after the pip
+install. The dependency script will install `gcc-13`/`g++-13` when they are
+missing, because Conan Center's Linux `ffmpeg/7.1.3` binaries are published for
+GCC 13.
+
+Install or refresh dependencies:
+
+```bash
+bash ./pull_dependency.sh
+```
+
+Press Enter at both prompts to use the defaults:
+
+- FFmpeg flavor: `light`
+- Build type: `Debug`
+
+Configure and build:
+
+```bash
+cmake --preset voice-av-linux-debug
+cmake --build --preset voice-av-linux-debug
+```
+
+Run the basic FFmpeg version example:
+
+```bash
+./build/cmake-linux-debug/Debug/voice_av_learning
+```
+
 ## Dependencies
 
 This project uses `ffmpeg/7.1.3` from Conan Center. Conan Center does not
 publish an exact `ffmpeg/7.1` recipe, so the project pins the latest available
 7.1 patch release.
 
-Dependency files are generated under `build/generators`, and this project uses
-a project-local Conan cache under `build/conan_home`.
+Dependency files are generated under `build/<platform>/generators`, and this
+project uses a project-local Conan cache under `build/<platform>/conan_home`.
+For example, Windows uses `build/windows`, and Linux uses `build/linux`.
 
 Use a specific dependency flavor or build type:
 
@@ -44,9 +84,15 @@ Use a specific dependency flavor or build type:
 .\pull_dependency.ps1 -Flavor full -BuildType Release
 ```
 
-The `light` flavor is the fast default and tries to reuse prebuilt Conan
-packages. The `full` flavor enables more FFmpeg options and may compile FFmpeg
-locally.
+```bash
+bash ./pull_dependency.sh --flavor light --build-type Debug
+bash ./pull_dependency.sh --flavor full --build-type Release
+```
+
+The `light` flavor is the fast default and uses Conan Center prebuilt packages
+only. On Ubuntu 22 LTS, the script installs GCC 13 if needed so the local Conan
+profile matches the available Linux FFmpeg binaries. The `full` flavor enables
+more FFmpeg options and may compile FFmpeg locally.
 
 See [FFmpeg Dependency](docs/ffmpeg-dependency.md) for flavor details, Conan
 option mapping, and native FFmpeg configure flags that the Conan Center recipe
@@ -54,7 +100,8 @@ does not expose.
 
 ## Editor Navigation
 
-`pull_dependency.ps1` prepares FFmpeg source navigation for clangd:
+`pull_dependency.ps1` on Windows and `pull_dependency.sh` on Linux prepare
+FFmpeg source navigation for clangd:
 
 - searches `third_party` for an existing FFmpeg source tree
 - downloads FFmpeg source to `third_party/ffmpeg-src` if none is found
@@ -67,13 +114,13 @@ suppresses that editor-only version check.
 
 ## Build Commands
 
-Configure:
+Configure on Windows:
 
 ```powershell
 cmake --preset voice-av-vs2022-x64
 ```
 
-Build Debug or Release:
+Build Debug or Release on Windows:
 
 ```powershell
 cmake --build --preset voice-av-vs2022-x64-debug
@@ -84,6 +131,20 @@ Open the generated Visual Studio solution:
 
 ```powershell
 cmake --open build/cmake
+```
+
+Configure on Ubuntu 22 LTS:
+
+```bash
+cmake --preset voice-av-linux-debug
+cmake --preset voice-av-linux-release
+```
+
+Build Debug or Release on Ubuntu 22 LTS:
+
+```bash
+cmake --build --preset voice-av-linux-debug
+cmake --build --preset voice-av-linux-release
 ```
 
 ## Examples
@@ -101,6 +162,11 @@ cmake --build --preset voice-av-vs2022-x64-debug --target voice_av_08_05_decode_
 cmake --build --preset voice-av-vs2022-x64-debug --target voice_av_08_06_decode_video
 ```
 
+```bash
+cmake --build --preset voice-av-linux-debug --target voice_av_08_05_decode_audio
+cmake --build --preset voice-av-linux-debug --target voice_av_08_06_decode_video
+```
+
 Run group 08 examples from their `testFiles` directory:
 
 ```powershell
@@ -108,6 +174,13 @@ Push-Location .\voice_av\08-ffmpeg-demuxing-and-decoding\testFiles
 ..\..\..\build\cmake\Debug\voice_av_08_05_decode_audio.exe believe.aac believe.pcm
 ..\..\..\build\cmake\Debug\voice_av_08_06_decode_video.exe source.200kbps.768x320_10s.h264 source.yuv
 Pop-Location
+```
+
+```bash
+pushd ./voice_av/08-ffmpeg-demuxing-and-decoding/testFiles
+../../../build/cmake-linux-debug/Debug/voice_av_08_05_decode_audio believe.aac believe.pcm
+../../../build/cmake-linux-debug/Debug/voice_av_08_06_decode_video source.200kbps.768x320_10s.h264 source.yuv
+popd
 ```
 
 See [Voice AV Examples](voice_av/README.md) for the steps to add a new example.
