@@ -15,6 +15,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ffmpegVersion = "7.1.3"
+$ffmpegNavigationStampVersion = "1"
 $compilerCppStd = "17"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $conanHome = Join-Path $repoRoot "build/conan_home"
@@ -137,18 +138,33 @@ function Get-RelativePath {
     ).Replace("/", [System.IO.Path]::DirectorySeparatorChar)
 }
 
+function Test-FFmpegSourceRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    return (
+        (Test-Path -LiteralPath (Join-Path $Path "libavformat/avformat.c")) -and
+        (Test-Path -LiteralPath (Join-Path $Path "libavcodec/avcodec.c")) -and
+        (Test-Path -LiteralPath (Join-Path $Path "libavutil/avutil.h"))
+    )
+}
+
 function Find-FFmpegSource {
     if (-not (Test-Path -LiteralPath $thirdPartyDir)) {
         return $null
+    }
+
+    if (Test-FFmpegSourceRoot -Path $ffmpegSourceDir) {
+        return $ffmpegSourceDir
     }
 
     $candidates = Get-ChildItem -LiteralPath $thirdPartyDir -Directory -Recurse -ErrorAction SilentlyContinue |
         Where-Object {
             $_.FullName -notlike (Join-Path $downloadDir "*") -and
             $_.FullName -notlike (Join-Path $extractDir "*") -and
-            (Test-Path -LiteralPath (Join-Path $_.FullName "libavformat/avformat.c")) -and
-            (Test-Path -LiteralPath (Join-Path $_.FullName "libavcodec/avcodec.c")) -and
-            (Test-Path -LiteralPath (Join-Path $_.FullName "libavutil/avutil.h"))
+            (Test-FFmpegSourceRoot -Path $_.FullName)
         } |
         Sort-Object FullName
 
@@ -160,11 +176,63 @@ function Find-FFmpegSource {
     return $first.FullName
 }
 
+function Get-FFmpegNavigationStamp {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir
+    )
+
+    return @(
+        "stamp_version=$ffmpegNavigationStampVersion"
+        "ffmpeg_version=$ffmpegVersion"
+        "source_dir=$SourceDir"
+    ) -join "`n"
+}
+
+function Test-FFmpegNavigationFresh {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedStamp
+    )
+
+    $requiredFiles = @(
+        (Join-Path $SourceDir "compile_flags.txt"),
+        (Join-Path $SourceDir "config.h"),
+        (Join-Path $SourceDir "config_components.h"),
+        (Join-Path $SourceDir "libavutil/ffversion.h"),
+        (Join-Path $SourceDir "libavutil/avconfig.h"),
+        (Join-Path $SourceDir "compile_commands.json")
+    )
+
+    foreach ($requiredFile in $requiredFiles) {
+        if (-not (Test-Path -LiteralPath $requiredFile)) {
+            return $false
+        }
+    }
+
+    $stampPath = Join-Path $SourceDir ".voice-av-navigation.stamp"
+    if (-not (Test-Path -LiteralPath $stampPath)) {
+        return $false
+    }
+
+    $currentStamp = Get-Content -LiteralPath $stampPath -Raw
+    return ($currentStamp.Trim() -eq $ExpectedStamp.Trim())
+}
+
 function Ensure-FFmpegNavigationFiles {
     param(
         [Parameter(Mandatory = $true)]
         [string]$SourceDir
     )
+
+    $navigationStamp = Get-FFmpegNavigationStamp -SourceDir $SourceDir
+    if (Test-FFmpegNavigationFresh -SourceDir $SourceDir -ExpectedStamp $navigationStamp) {
+        Write-Success "FFmpeg navigation files are already up to date."
+        return $false
+    }
 
     @"
 -I.
@@ -271,7 +339,7 @@ function Ensure-FFmpegNavigationFiles {
         "libswscale"
     )
 
-    $compileCommands = @()
+    $compileCommands = [System.Collections.Generic.List[object]]::new()
     foreach ($sourceSubdir in $sourceSubdirs) {
         $fullSourceSubdir = Join-Path $SourceDir $sourceSubdir
         if (-not (Test-Path -LiteralPath $fullSourceSubdir)) {
@@ -283,17 +351,19 @@ function Ensure-FFmpegNavigationFiles {
 
         foreach ($sourceFile in $sourceFiles) {
             $relativeSource = (Get-RelativePath -BasePath $SourceDir -Path $sourceFile.FullName).Replace("\", "/")
-            $compileCommands += [PSCustomObject]@{
+            $compileCommands.Add([PSCustomObject]@{
                 directory = $SourceDir
                 command = "clang -x c -std=c11 -fsyntax-only -DHAVE_AV_CONFIG_H -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH -I. -Icompat -Ilibavcodec -Ilibavdevice -Ilibavfilter -Ilibavformat -Ilibavutil -Ilibpostproc -Ilibswresample -Ilibswscale $relativeSource"
                 file = $sourceFile.FullName
-            }
+            }) | Out-Null
         }
     }
 
-    $compileCommands |
-        ConvertTo-Json -Depth 3 |
+    ConvertTo-Json -InputObject $compileCommands.ToArray() -Depth 3 |
         Set-Content -LiteralPath (Join-Path $SourceDir "compile_commands.json") -Encoding ASCII
+    $navigationStamp |
+        Set-Content -LiteralPath (Join-Path $SourceDir ".voice-av-navigation.stamp") -Encoding ASCII
+    return $true
 }
 
 function Get-FFmpegPackageIncludeDir {
@@ -359,7 +429,7 @@ function Get-ProjectCompilationCommands {
     }
     $sourceFiles = $sourceFiles | Sort-Object FullName
 
-    $projectCommands = @()
+    $projectCommands = [System.Collections.Generic.List[object]]::new()
     foreach ($sourceFile in $sourceFiles) {
         $relativeSource = (Get-RelativePath -BasePath $repoRoot -Path $sourceFile.FullName).Replace("\", "/")
         $relativeFFmpegSource = (Get-RelativePath -BasePath $repoRoot -Path $FFmpegSourceDir).Replace("\", "/")
@@ -368,14 +438,14 @@ function Get-ProjectCompilationCommands {
         $language = if ($isCxx) { "c++" } else { "c" }
         $standard = if ($isCxx) { "c++17" } else { "c11" }
 
-        $projectCommands += [PSCustomObject]@{
+        $projectCommands.Add([PSCustomObject]@{
             directory = $repoRoot
             command = "$compiler -x $language -std=$standard -fsyntax-only -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH -I$relativeFFmpegSource $ffmpegIncludeArg$relativeSource"
             file = $sourceFile.FullName
-        }
+        }) | Out-Null
     }
 
-    return $projectCommands
+    return $projectCommands.ToArray()
 }
 
 function Sync-ClangdCompilationDatabase {
@@ -384,17 +454,17 @@ function Sync-ClangdCompilationDatabase {
         [string]$FFmpegSourceDir
     )
 
-    $mergedCommands = @()
+    $mergedCommands = [System.Collections.Generic.List[object]]::new()
     $projectCommands = Get-ProjectCompilationCommands -FFmpegSourceDir $FFmpegSourceDir
     foreach ($projectCommand in $projectCommands) {
-        $mergedCommands += $projectCommand
+        $mergedCommands.Add($projectCommand) | Out-Null
     }
 
     $ffmpegCompileCommandsPath = Join-Path $FFmpegSourceDir "compile_commands.json"
     if (Test-Path -LiteralPath $ffmpegCompileCommandsPath) {
         $ffmpegCommands = Get-Content -LiteralPath $ffmpegCompileCommandsPath -Raw | ConvertFrom-Json
         foreach ($ffmpegCommand in $ffmpegCommands) {
-            $mergedCommands += $ffmpegCommand
+            $mergedCommands.Add($ffmpegCommand) | Out-Null
         }
     }
 
@@ -403,8 +473,7 @@ function Sync-ClangdCompilationDatabase {
     }
 
     New-Item -ItemType Directory -Force -Path $clangdBuildDir | Out-Null
-    $mergedCommands |
-        ConvertTo-Json -Depth 5 |
+    ConvertTo-Json -InputObject $mergedCommands.ToArray() -Depth 5 |
         Set-Content -LiteralPath (Join-Path $clangdBuildDir "compile_commands.json") -Encoding ASCII
 
     Copy-Item `
@@ -492,9 +561,11 @@ function Sync-FFmpegSource {
 
     $existingSource = Find-FFmpegSource
     if (-not [string]::IsNullOrWhiteSpace($existingSource)) {
-        Ensure-FFmpegNavigationFiles -SourceDir $existingSource
+        $navigationRefreshed = Ensure-FFmpegNavigationFiles -SourceDir $existingSource
         Write-Success "FFmpeg source found: $existingSource"
-        Write-Info "Navigation files refreshed under the source tree."
+        if ($navigationRefreshed) {
+            Write-Info "Navigation files refreshed under the source tree."
+        }
         return $existingSource
     }
 
@@ -542,6 +613,8 @@ if ([string]::IsNullOrWhiteSpace($Flavor)) {
     $inputFlavor = Read-ColoredPrompt "FFmpeg flavor [light/full] (default: light):"
     $Flavor = if ([string]::IsNullOrWhiteSpace($inputFlavor)) { "light" } else { $inputFlavor.Trim().ToLowerInvariant() }
 }
+
+$Flavor = $Flavor.Trim().ToLowerInvariant()
 
 if ($Flavor -notin @("light", "full")) {
     throw "Invalid FFmpeg flavor '$Flavor'. Use 'light' or 'full'."

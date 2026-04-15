@@ -20,7 +20,18 @@ option(
     ON
 )
 
-if(VOICE_AV_USE_RELEASE_CONAN_DEPS AND CMAKE_CONFIGURATION_TYPES)
+set(VOICE_AV_FFMPEG_DEBUG_CONFIG
+    "${VOICE_AV_CONAN_GENERATORS_DIR}/ffmpeg-Target-debug.cmake"
+)
+set(VOICE_AV_FFMPEG_RELEASE_CONFIG
+    "${VOICE_AV_CONAN_GENERATORS_DIR}/ffmpeg-Target-release.cmake"
+)
+
+if(VOICE_AV_USE_RELEASE_CONAN_DEPS
+    AND CMAKE_CONFIGURATION_TYPES
+    AND EXISTS "${VOICE_AV_FFMPEG_RELEASE_CONFIG}"
+    AND NOT EXISTS "${VOICE_AV_FFMPEG_DEBUG_CONFIG}"
+)
     set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
     set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
     set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL Release)
@@ -121,7 +132,7 @@ function(voice_av_make_example_target_name output_var source_dir)
     string(REGEX REPLACE "[^a-z0-9]+" "_" _project_name "${_project_name}")
     string(REGEX REPLACE "^_+|_+$" "" _project_name "${_project_name}")
 
-    set(${output_var} "lesson_${_example_group_number}_${_project_name}" PARENT_SCOPE)
+    set(${output_var} "voice_av_${_example_group_number}_${_project_name}" PARENT_SCOPE)
 endfunction()
 
 function(voice_av_collect_sources output_var)

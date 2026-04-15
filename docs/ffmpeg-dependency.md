@@ -1,9 +1,9 @@
-# FFmpeg Conan options
+# FFmpeg Dependency
 
 This project uses `ffmpeg/7.1.3` from Conan Center because Conan Center does
 not publish an exact `ffmpeg/7.1` recipe.
 
-## Flavor selection
+## Flavor Selection
 
 The project exposes a local Conan option named `ffmpeg_flavor`:
 
@@ -29,7 +29,7 @@ For `light + Debug`, the script installs Release Conan packages and the CMake
 project maps Debug builds to those packages. This keeps the default path on
 prebuilt FFmpeg binaries.
 
-## Requested flags mapped to Conan options
+## Mapped Configure Flags
 
 - `--enable-static`: `ffmpeg/*:shared=False`
 - `--enable-bzlib`: `ffmpeg/*:with_bzip2=True`
@@ -61,7 +61,7 @@ postproc are enabled. Because the recipe supports OpenSSL instead of GnuTLS,
 using TLS together with GPL dependencies may also make the FFmpeg build
 `nonfree` in FFmpeg's configure logic.
 
-## Requested flags not exposed by the Conan Center recipe
+## Unmapped Configure Flags
 
 These flags are not configurable through the official `ffmpeg` Conan Center
 recipe at the moment:
