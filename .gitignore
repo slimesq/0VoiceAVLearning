@@ -22,6 +22,9 @@ third_party/_ffmpeg-extract/
 *.pcm
 *.yuv
 test_files/
+!voice_av/test_files/.gitkeep
+!voice_av/test_files/README.md
+
 
 # CLion
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

@@ -11,6 +11,7 @@ third_party_dir="$repo_root/third_party"
 ffmpeg_source_dir="$third_party_dir/ffmpeg-src"
 download_dir="$third_party_dir/_downloads"
 archive_path="$download_dir/ffmpeg-$ffmpeg_version.tar.bz2"
+archive_temp_path="$archive_path.tmp"
 extract_dir="$third_party_dir/_ffmpeg-extract"
 ffmpeg_url="https://ffmpeg.org/releases/ffmpeg-$ffmpeg_version.tar.bz2"
 generator_dir="$repo_root/build/linux/generators"
@@ -176,27 +177,10 @@ is_ffmpeg_source_root() {
 }
 
 find_ffmpeg_source() {
-    if [[ ! -d "$third_party_dir" ]]; then
-        return 1
-    fi
-
     if is_ffmpeg_source_root "$ffmpeg_source_dir"; then
         printf '%s\n' "$ffmpeg_source_dir"
         return 0
     fi
-
-    while IFS= read -r candidate; do
-        case "$candidate" in
-            "$download_dir"|"$download_dir"/*|"$extract_dir"|"$extract_dir"/*)
-                continue
-                ;;
-        esac
-
-        if is_ffmpeg_source_root "$candidate"; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    done < <(find "$third_party_dir" -type d 2>/dev/null | sort)
 
     return 1
 }
@@ -446,6 +430,8 @@ if example_root.exists():
         [
             *example_root.rglob("*.c"),
             *example_root.rglob("*.cpp"),
+            *example_root.rglob("*.cc"),
+            *example_root.rglob("*.cxx"),
         ]
     )
 else:
@@ -529,11 +515,24 @@ download_file() {
     local output="$2"
 
     if command -v curl >/dev/null 2>&1; then
-        curl -L "$url" -o "$output"
+        curl --fail --location "$url" --output "$output"
     elif command -v wget >/dev/null 2>&1; then
         wget -O "$output" "$url"
     else
         die "curl or wget is required to download FFmpeg source."
+    fi
+}
+
+download_archive() {
+    remove_repo_item "$archive_temp_path"
+    if ! download_file "$ffmpeg_url" "$archive_temp_path"; then
+        remove_repo_item "$archive_temp_path"
+        die "Failed to download FFmpeg source archive."
+    fi
+
+    if ! mv -f "$archive_temp_path" "$archive_path"; then
+        remove_repo_item "$archive_temp_path"
+        die "Failed to move downloaded FFmpeg archive into place."
     fi
 }
 
@@ -552,13 +551,13 @@ sync_ffmpeg_source() {
         return 0
     fi
 
-    write_notice "FFmpeg source was not found under third_party."
+    write_notice "Managed FFmpeg source was not found at $ffmpeg_source_dir."
     write_step "Downloading FFmpeg source $ffmpeg_version for code navigation"
     mkdir -p "$download_dir" "$third_party_dir"
 
     if [[ ! -f "$archive_path" ]]; then
         write_info "Downloading: $ffmpeg_url"
-        download_file "$ffmpeg_url" "$archive_path"
+        download_archive
     else
         write_info "Using existing archive: $archive_path"
     fi
@@ -567,11 +566,18 @@ sync_ffmpeg_source() {
     mkdir -p "$extract_dir"
 
     write_info "Extracting archive..."
-    tar -xjf "$archive_path" -C "$extract_dir"
+    if ! tar -xjf "$archive_path" -C "$extract_dir"; then
+        remove_repo_item "$extract_dir"
+        remove_repo_item "$archive_path"
+        die "Failed to extract FFmpeg archive. Removed the cached archive so the next run can download it again."
+    fi
 
     local extracted_source="$extract_dir/ffmpeg-$ffmpeg_version"
-    [[ -d "$extracted_source" ]] ||
+    if [[ ! -d "$extracted_source" ]]; then
+        remove_repo_item "$extract_dir"
+        remove_repo_item "$archive_path"
         die "FFmpeg archive did not extract to expected folder: $extracted_source"
+    fi
 
     remove_repo_item "$ffmpeg_source_dir"
     mv "$extracted_source" "$ffmpeg_source_dir"

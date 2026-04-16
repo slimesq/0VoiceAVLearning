@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @projectName   voice_av_08_05_decode_audio
  * @brief         解码音频，主要的测试格式aac和mp3
  * @author        Liao Qingfu

@@ -103,8 +103,8 @@ does not expose.
 `pull_dependency.ps1` on Windows and `pull_dependency.sh` on Linux prepare
 FFmpeg source navigation for clangd:
 
-- searches `third_party` for an existing FFmpeg source tree
-- downloads FFmpeg source to `third_party/ffmpeg-src` if none is found
+- uses the managed FFmpeg source tree at `third_party/ffmpeg-src`
+- downloads FFmpeg source to `third_party/ffmpeg-src` if it is missing
 - writes the merged clangd database to `build/clangd/compile_commands.json`
 - copies a generated root `compile_commands.json` for editor compatibility
 
@@ -167,19 +167,19 @@ cmake --build --preset voice-av-linux-debug --target voice_av_08_05_decode_audio
 cmake --build --preset voice-av-linux-debug --target voice_av_08_06_decode_video
 ```
 
-Run group 08 examples from their `testFiles` directory:
+Run group 08 examples from `voice_av/test_files`:
 
 ```powershell
-Push-Location .\voice_av\08-ffmpeg-demuxing-and-decoding\testFiles
-..\..\..\build\cmake\Debug\voice_av_08_05_decode_audio.exe believe.aac believe.pcm
-..\..\..\build\cmake\Debug\voice_av_08_06_decode_video.exe source.200kbps.768x320_10s.h264 source.yuv
+Push-Location .\voice_av\test_files
+..\..\build\cmake\Debug\voice_av_08_05_decode_audio.exe believe.aac believe.pcm
+..\..\build\cmake\Debug\voice_av_08_06_decode_video.exe source.200kbps.768x320_10s.h264 source.yuv
 Pop-Location
 ```
 
 ```bash
-pushd ./voice_av/08-ffmpeg-demuxing-and-decoding/testFiles
-../../../build/cmake-linux-debug/Debug/voice_av_08_05_decode_audio believe.aac believe.pcm
-../../../build/cmake-linux-debug/Debug/voice_av_08_06_decode_video source.200kbps.768x320_10s.h264 source.yuv
+pushd ./voice_av/test_files
+../../build/cmake-linux-debug/Debug/voice_av_08_05_decode_audio believe.aac believe.pcm
+../../build/cmake-linux-debug/Debug/voice_av_08_06_decode_video source.200kbps.768x320_10s.h264 source.yuv
 popd
 ```
 

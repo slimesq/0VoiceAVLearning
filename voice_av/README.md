@@ -33,11 +33,25 @@ voice_av/
       encoder.h
 ```
 
-2. Put the project's source files in that directory.
+2. Use the standard example layout.
 
-The project can contain multiple `.c`, `.cpp`, `.h`, and `.hpp` files.
+```text
+01-encode-audio/
+  CMakeLists.txt
+  main.c
+  optional_helper.c
+  optional_helper.h
+```
 
-3. Add this one line to the project `CMakeLists.txt`:
+Each example should keep its entry point and local helpers together. A per-example
+README is optional and can be added later when the run steps are not obvious.
+
+3. Put the project's source files in that directory.
+
+The project can contain multiple `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`,
+`.hh`, and `.hxx` files.
+
+4. Add this one line to the project `CMakeLists.txt`:
 
 ```cmake
 voice_av_add_current_example_executable()
@@ -55,13 +69,13 @@ becomes:
 voice_av_09_01_encode_audio
 ```
 
-4. Re-run CMake configure after adding the directory:
+5. Re-run CMake configure after adding the directory:
 
 ```powershell
 cmake --preset voice-av-vs2022-x64
 ```
 
-5. Build the new target:
+6. Build the new target:
 
 ```powershell
 cmake --build --preset voice-av-vs2022-x64-debug --target voice_av_09_01_encode_audio
@@ -69,8 +83,9 @@ cmake --build --preset voice-av-vs2022-x64-debug --target voice_av_09_01_encode_
 
 ## Test Files
 
-Put local media files in a `testFiles` directory when an example needs input or
-output files. `testFiles` is ignored by git.
+Put local media files in `voice_av/test_files` when an example needs input or
+output files. Its media contents are ignored by git, while the directory is kept
+with `.gitkeep` and documented in `test_files/README.md`.
 
 For examples that use relative input paths, run the executable from the matching
-`testFiles` directory, or pass absolute paths.
+`voice_av/test_files` directory, or pass absolute paths.

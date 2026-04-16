@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @projectName   voice_av_08_06_decode_video
  * @brief         解码视频，主要的测试格式h264和mpeg2
  *

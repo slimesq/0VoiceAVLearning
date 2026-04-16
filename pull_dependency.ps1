@@ -23,6 +23,7 @@ $thirdPartyDir = Join-Path $repoRoot "third_party"
 $ffmpegSourceDir = Join-Path $thirdPartyDir "ffmpeg-src"
 $downloadDir = Join-Path $thirdPartyDir "_downloads"
 $archivePath = Join-Path $downloadDir "ffmpeg-$ffmpegVersion.tar.bz2"
+$archiveTempPath = "$archivePath.tmp"
 $extractDir = Join-Path $thirdPartyDir "_ffmpeg-extract"
 $ffmpegUrl = "https://ffmpeg.org/releases/ffmpeg-$ffmpegVersion.tar.bz2"
 $generatorDir = Join-Path $repoRoot "build/windows/generators"
@@ -90,6 +91,14 @@ function Read-ColoredPrompt {
     return Read-Host
 }
 
+function Test-InteractiveInput {
+    try {
+        return -not [Console]::IsInputRedirected
+    } catch {
+        return $false
+    }
+}
+
 function Assert-UnderRepo {
     param(
         [Parameter(Mandatory = $true)]
@@ -98,7 +107,15 @@ function Assert-UnderRepo {
 
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $fullRoot = [System.IO.Path]::GetFullPath($repoRoot)
-    if (-not $fullPath.StartsWith($fullRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $fullRootWithSeparator = $fullRoot
+    if (-not $fullRootWithSeparator.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $fullRootWithSeparator += [System.IO.Path]::DirectorySeparatorChar
+    }
+
+    if (
+        -not $fullPath.Equals($fullRoot, [System.StringComparison]::OrdinalIgnoreCase) -and
+        -not $fullPath.StartsWith($fullRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)
+    ) {
         throw "Refusing to modify path outside repository: $fullPath"
     }
 }
@@ -152,28 +169,11 @@ function Test-FFmpegSourceRoot {
 }
 
 function Find-FFmpegSource {
-    if (-not (Test-Path -LiteralPath $thirdPartyDir)) {
-        return $null
-    }
-
     if (Test-FFmpegSourceRoot -Path $ffmpegSourceDir) {
         return $ffmpegSourceDir
     }
 
-    $candidates = Get-ChildItem -LiteralPath $thirdPartyDir -Directory -Recurse -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.FullName -notlike (Join-Path $downloadDir "*") -and
-            $_.FullName -notlike (Join-Path $extractDir "*") -and
-            (Test-FFmpegSourceRoot -Path $_.FullName)
-        } |
-        Sort-Object FullName
-
-    $first = $candidates | Select-Object -First 1
-    if ($null -eq $first) {
-        return $null
-    }
-
-    return $first.FullName
+    return $null
 }
 
 function Get-FFmpegNavigationStamp {
@@ -424,8 +424,9 @@ function Get-ProjectCompilationCommands {
     $exampleRoot = Join-Path $repoRoot "voice_av"
     $sourceFiles = @()
     if (Test-Path -LiteralPath $exampleRoot) {
-        $sourceFiles += Get-ChildItem -LiteralPath $exampleRoot -Recurse -Filter "*.c" -File -ErrorAction SilentlyContinue
-        $sourceFiles += Get-ChildItem -LiteralPath $exampleRoot -Recurse -Filter "*.cpp" -File -ErrorAction SilentlyContinue
+        foreach ($sourceExtension in @("*.c", "*.cpp", "*.cc", "*.cxx")) {
+            $sourceFiles += Get-ChildItem -LiteralPath $exampleRoot -Recurse -Filter $sourceExtension -File -ErrorAction SilentlyContinue
+        }
     }
     $sourceFiles = $sourceFiles | Sort-Object FullName
 
@@ -569,14 +570,21 @@ function Sync-FFmpegSource {
         return $existingSource
     }
 
-    Write-Notice "FFmpeg source was not found under third_party."
+    Write-Notice "Managed FFmpeg source was not found at $ffmpegSourceDir."
     Write-Step "Downloading FFmpeg source $ffmpegVersion for code navigation"
     New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
     New-Item -ItemType Directory -Force -Path $thirdPartyDir | Out-Null
 
     if (-not (Test-Path -LiteralPath $archivePath)) {
         Write-Info "Downloading: $ffmpegUrl"
-        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $archivePath
+        Remove-RepoItem -Path $archiveTempPath
+        try {
+            Invoke-WebRequest -Uri $ffmpegUrl -OutFile $archiveTempPath
+            Move-Item -LiteralPath $archiveTempPath -Destination $archivePath -Force
+        } catch {
+            Remove-RepoItem -Path $archiveTempPath
+            throw
+        }
     } else {
         Write-Info "Using existing archive: $archivePath"
     }
@@ -586,9 +594,16 @@ function Sync-FFmpegSource {
 
     Write-Info "Extracting archive..."
     tar -xjf $archivePath -C $extractDir
+    if ($LASTEXITCODE -ne 0) {
+        Remove-RepoItem -Path $extractDir
+        Remove-RepoItem -Path $archivePath
+        throw "Failed to extract FFmpeg archive. Removed the cached archive so the next run can download it again."
+    }
 
     $extractedSource = Join-Path $extractDir "ffmpeg-$ffmpegVersion"
     if (-not (Test-Path -LiteralPath $extractedSource)) {
+        Remove-RepoItem -Path $extractDir
+        Remove-RepoItem -Path $archivePath
         throw "FFmpeg archive did not extract to expected folder: $extractedSource"
     }
 
@@ -607,11 +622,16 @@ Write-Info "Repository: $repoRoot"
 Write-Info "Project Conan cache: $conanHome"
 
 if ([string]::IsNullOrWhiteSpace($Flavor)) {
-    Write-Step "Choose FFmpeg dependency flavor"
-    Write-Info "light: fast path, uses Conan Center defaults and prebuilt packages when available."
-    Write-Info "full : enables more FFmpeg options and may compile FFmpeg locally."
-    $inputFlavor = Read-ColoredPrompt "FFmpeg flavor [light/full] (default: light):"
-    $Flavor = if ([string]::IsNullOrWhiteSpace($inputFlavor)) { "light" } else { $inputFlavor.Trim().ToLowerInvariant() }
+    if (Test-InteractiveInput) {
+        Write-Step "Choose FFmpeg dependency flavor"
+        Write-Info "light: fast path, uses Conan Center defaults and prebuilt packages when available."
+        Write-Info "full : enables more FFmpeg options and may compile FFmpeg locally."
+        $inputFlavor = Read-ColoredPrompt "FFmpeg flavor [light/full] (default: light):"
+        $Flavor = if ([string]::IsNullOrWhiteSpace($inputFlavor)) { "light" } else { $inputFlavor.Trim().ToLowerInvariant() }
+    } else {
+        $Flavor = "light"
+        Write-Notice "No interactive input detected. Using default FFmpeg flavor: $Flavor"
+    }
 }
 
 $Flavor = $Flavor.Trim().ToLowerInvariant()
@@ -621,11 +641,16 @@ if ($Flavor -notin @("light", "full")) {
 }
 
 if ([string]::IsNullOrWhiteSpace($BuildType)) {
-    Write-Step "Choose build type"
-    Write-Info "Debug  : default for learning and local debugging."
-    Write-Info "Release: optimized build type for dependency resolution."
-    $inputBuildType = Read-ColoredPrompt "Build type [Debug/Release] (default: Debug):"
-    $BuildType = if ([string]::IsNullOrWhiteSpace($inputBuildType)) { "Debug" } else { $inputBuildType.Trim() }
+    if (Test-InteractiveInput) {
+        Write-Step "Choose build type"
+        Write-Info "Debug  : default for learning and local debugging."
+        Write-Info "Release: optimized build type for dependency resolution."
+        $inputBuildType = Read-ColoredPrompt "Build type [Debug/Release] (default: Debug):"
+        $BuildType = if ([string]::IsNullOrWhiteSpace($inputBuildType)) { "Debug" } else { $inputBuildType.Trim() }
+    } else {
+        $BuildType = "Debug"
+        Write-Notice "No interactive input detected. Using default build type: $BuildType"
+    }
 }
 
 $BuildType = switch ($BuildType.ToLowerInvariant()) {
